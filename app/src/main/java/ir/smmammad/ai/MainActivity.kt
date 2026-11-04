@@ -2,10 +2,17 @@ package ir.smmammad.ai
 
 import android.content.Context
 import android.os.Bundle
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -16,6 +23,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -61,6 +70,14 @@ fun AssistantScreen() {
     var keyDraft by remember { mutableStateOf(apiKey) }
     var showSettings by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
+    var voiceActive by remember { mutableStateOf(false) }
+    val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val intent = Intent(context, SpeechWakeService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+            voiceActive = true
+        }
+    }
     val messages = remember {
         mutableStateListOf(
             ChatMessage("سلام مشتی! من دستیار اس ممد هستم. برای پاسخ هوشمند، کلید رایگان OpenRouter را در تنظیمات وارد کن. مدل فقط از مسیر رایگان انتخاب می‌شود.", false)
@@ -74,7 +91,19 @@ fun AssistantScreen() {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f)) {
                     Text("دستیار اس ممد", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-                    Text("چت‌بات هوشمند آنلاین • مدل‌های رایگان", color = Color(0xFF8FA9C2), fontSize = 12.sp)
+                    Text(if (voiceActive) "دستیار صوتی پس‌زمینه فعال • بگو: مشتی چه خبر" else "چت‌بات آنلاین • برای شنود پس‌زمینه، میکروفون را روشن کن", color = Color(0xFF8FA9C2), fontSize = 12.sp)
+                }
+                IconButton(onClick = {
+                    if (voiceActive) {
+                        context.stopService(Intent(context, SpeechWakeService::class.java))
+                        voiceActive = false
+                    } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        val intent = Intent(context, SpeechWakeService::class.java)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+                        voiceActive = true
+                    } else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }) {
+                    Icon(if (voiceActive) Icons.Default.MicOff else Icons.Default.Mic, contentDescription = "فعال یا خاموش کردن دستیار صوتی", tint = if (voiceActive) Color(0xFFFFC66D) else Color(0xFF32D6C2))
                 }
                 IconButton(onClick = { keyDraft = apiKey; showSettings = true }) {
                     Icon(Icons.Default.Settings, contentDescription = "تنظیمات اتصال", tint = Color(0xFF32D6C2))
@@ -203,7 +232,7 @@ fun AssistantScreen() {
     }
 }
 
-private suspend fun askOpenRouter(apiKey: String, history: List<ChatMessage>, latest: String): String =
+internal suspend fun askOpenRouter(apiKey: String, history: List<ChatMessage>, latest: String): String =
     withContext(Dispatchers.IO) {
         val messagesJson = JSONArray()
         messagesJson.put(JSONObject()
@@ -248,7 +277,7 @@ private suspend fun askOpenRouter(apiKey: String, history: List<ChatMessage>, la
         }
     }
 
-private object SecureApiKeyStore {
+internal object SecureApiKeyStore {
     private const val PREFS = "assistant_secure_settings"
     private const val KEY_NAME = "openrouter_key"
     private const val ALIAS = "dastyar_openrouter_aes"
