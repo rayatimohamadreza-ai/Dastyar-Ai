@@ -180,6 +180,10 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun speak(message: String) {
+        tts?.speak(message.take(3500), TextToSpeech.QUEUE_FLUSH, null, "smmammad_ack")
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(channelId, "دستیار صوتی اس ممد", NotificationManager.IMPORTANCE_LOW)
