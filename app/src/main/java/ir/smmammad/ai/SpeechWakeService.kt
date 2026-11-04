@@ -130,7 +130,7 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun startListeningSafely() {
-        if (!ready || listening || isDestroyed || recognizer == null) return
+        if (!ready || listening || recognizer == null) return
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
