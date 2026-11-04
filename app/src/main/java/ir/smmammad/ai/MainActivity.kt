@@ -1,7 +1,10 @@
 package ir.smmammad.ai
 
 import android.content.Context
+import android.app.Activity
 import android.os.Bundle
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -41,6 +44,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -77,6 +81,42 @@ fun AssistantScreen() {
         mutableStateListOf(
             ChatMessage("سلام! بپرس.", false)
         )
+    }
+    val voiceInputLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val recognized = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.trim()
+            if (!recognized.isNullOrBlank()) {
+                prompt = listOf(prompt, recognized).filter { it.isNotBlank() }.joinToString(" ")
+            }
+        }
+    }
+    val launchVoiceInput: () -> Unit = {
+        val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "به فارسی صحبت کن")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        try {
+            voiceInputLauncher.launch(speechIntent)
+        } catch (_: Exception) {
+            messages.add(ChatMessage("سرویس تشخیص گفتار روی گوشی در دسترس نیست.", false))
+        }
+    }
+    val voicePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) launchVoiceInput()
+        else messages.add(ChatMessage("برای تبدیل گفتار به متن، مجوز میکروفون لازم است.", false))
+    }
+    val replyTts = remember(context) { TextToSpeech(context, null) }
+    DisposableEffect(replyTts) {
+        onDispose {
+            replyTts.stop()
+            replyTts.shutdown()
+        }
     }
     val navy = Color(0xFF081526)
     val panel = Color(0xFF12263D)
@@ -118,7 +158,25 @@ fun AssistantScreen() {
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.widthIn(max = 310.dp)
                         ) {
-                            Text(msg.text, color = Color.White, modifier = Modifier.padding(13.dp), fontSize = 14.sp)
+                            Column(Modifier.padding(13.dp)) {
+                                Text(msg.text, color = Color.White, fontSize = 14.sp)
+                                if (!msg.fromUser) {
+                                    TextButton(
+                                        contentPadding = PaddingValues(0.dp),
+                                        onClick = {
+                                            replyTts.language = Locale("fa", "IR")
+                                            replyTts.speak(
+                                                msg.text.take(3500),
+                                                TextToSpeech.QUEUE_FLUSH,
+                                                null,
+                                                "smmammad_chat_reply"
+                                            )
+                                        }
+                                    ) {
+                                        Text("🔊 پخش پاسخ", color = Color(0xFF32D6C2), fontSize = 11.sp)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -143,6 +201,18 @@ fun AssistantScreen() {
                         inner()
                     }
                 )
+                IconButton(
+                    enabled = !loading,
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            launchVoiceInput()
+                        } else {
+                            voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    }
+                ) {
+                    Text("🎙", color = Color(0xFF32D6C2), fontSize = 19.sp)
+                }
                 IconButton(
                     enabled = !loading,
                     onClick = {
