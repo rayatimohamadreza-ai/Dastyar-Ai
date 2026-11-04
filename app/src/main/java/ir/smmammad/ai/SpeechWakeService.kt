@@ -15,6 +15,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -100,8 +101,7 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
             if (command.isNotBlank()) {
                 handleCommand(command)
             } else {
-                speak("جانم، گوش می‌کنم. بگو چه کاری انجام بدم.")
-                handler.postDelayed({ awaitingCommand = true; startListeningSafely() }, 1600)
+                speakAndListen("جانم، گوش می‌کنم. بگو چه کاری انجام بدم.", awaitCommand = true)
             }
             return
         }
@@ -113,8 +113,7 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
         awaitingCommand = false
         val key = SecureApiKeyStore.read(this)
         if (key.isNullOrBlank()) {
-            speak("اول کلید رایگان هوش مصنوعی را از تنظیمات برنامه وارد کن.")
-            handler.postDelayed({ startListeningSafely() }, 3000)
+            speakAndListen("اول کلید رایگان هوش مصنوعی را از تنظیمات برنامه وارد کن.")
             return
         }
         speak("چشم، دارم بررسی می‌کنم.")
@@ -124,8 +123,7 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
             } catch (e: Exception) {
                 "ارتباط برقرار نشد. اینترنت و کلید اتصال را بررسی کن."
             }
-            speak(answer)
-            handler.postDelayed({ startListeningSafely() }, 1200)
+            speakAndListen(answer)
         }
     }
 
@@ -146,8 +144,40 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun speak(message: String) {
-        tts?.speak(message.take(3500), TextToSpeech.QUEUE_FLUSH, null, "smmammad_reply")
+    private fun speakAndListen(message: String, awaitCommand: Boolean = false) {
+        val engine = tts
+        if (engine == null) {
+            if (awaitCommand) this.awaitingCommand = true
+            handler.postDelayed({ startListeningSafely() }, 500)
+            return
+        }
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+
+            override fun onDone(utteranceId: String?) {
+                handler.post {
+                    if (awaitCommand) this@SpeechWakeService.awaitingCommand = true
+                    startListeningSafely()
+                }
+            }
+
+            override fun onError(utteranceId: String?) {
+                handler.post {
+                    if (awaitCommand) this@SpeechWakeService.awaitingCommand = true
+                    startListeningSafely()
+                }
+            }
+        })
+        val result = engine.speak(
+            message.take(3500),
+            TextToSpeech.QUEUE_FLUSH,
+            null,
+            "smmammad_reply"
+        )
+        if (result == TextToSpeech.ERROR) {
+            if (awaitCommand) this.awaitingCommand = true
+            handler.postDelayed({ startListeningSafely() }, 700)
+        }
     }
 
     private fun createNotificationChannel() {
