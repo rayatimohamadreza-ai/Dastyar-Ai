@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.provider.Settings
+import android.provider.MediaStore
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -111,6 +113,7 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
 
     private fun handleCommand(command: String) {
         awaitingCommand = false
+        if (tryHandleLocalCommand(command)) return
         val key = SecureApiKeyStore.read(this)
         if (key.isNullOrBlank()) {
             speakAndListen("اول کلید رایگان هوش مصنوعی را از تنظیمات برنامه وارد کن.")
@@ -124,6 +127,60 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
                 "ارتباط برقرار نشد. اینترنت و کلید اتصال را بررسی کن."
             }
             speakAndListen(answer)
+        }
+    }
+
+    /**
+     * Executes a small allowlist of safe, explicit phone navigation commands locally.
+     * No accessibility clicks or hidden actions are performed.
+     */
+    private fun tryHandleLocalCommand(rawCommand: String): Boolean {
+        val command = rawCommand.lowercase(Locale.ROOT)
+        val intent: Intent? = when {
+            command.contains("تنظیمات وای فای") || command.contains("تنظیمات wifi") ->
+                Intent(Settings.ACTION_WIFI_SETTINGS)
+            command.contains("تنظیمات بلوتوث") ->
+                Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+            command.contains("تنظیمات گوشی") || command == "تنظیمات" || command.contains("باز کن تنظیمات") ->
+                Intent(Settings.ACTION_SETTINGS)
+            command.contains("دوربین") || command.contains("عکس بگیر") ->
+                Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+            else -> null
+        }
+        if (intent != null) {
+            return try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                speakAndListen("چشم، بازش کردم.")
+                true
+            } catch (_: Exception) {
+                speakAndListen("نتونستم این بخش رو باز کنم.")
+                true
+            }
+        }
+
+        val packageNameToOpen = when {
+            command.contains("واتساپ") || command.contains("whatsapp") -> "com.whatsapp"
+            command.contains("تلگرام") || command.contains("telegram") -> "org.telegram.messenger"
+            command.contains("اینستاگرام") || command.contains("instagram") -> "com.instagram.android"
+            command.contains("کروم") || command.contains("chrome") -> "com.android.chrome"
+            command.contains("یوتیوب") || command.contains("youtube") -> "com.google.android.youtube"
+            else -> null
+        } ?: return false
+
+        return try {
+            val launch = packageManager.getLaunchIntentForPackage(packageNameToOpen)
+            if (launch == null) {
+                speakAndListen("این برنامه روی گوشی نصب نیست.")
+            } else {
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(launch)
+                speakAndListen("چشم، بازش کردم.")
+            }
+            true
+        } catch (_: Exception) {
+            speakAndListen("باز کردن برنامه انجام نشد.")
+            true
         }
     }
 
