@@ -21,11 +21,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -80,18 +75,17 @@ fun AssistantScreen() {
     }
     val messages = remember {
         mutableStateListOf(
-            ChatMessage("سلام مشتی! من دستیار اس ممد هستم. برای پاسخ هوشمند، کلید رایگان OpenRouter را در تنظیمات وارد کن. مدل فقط از مسیر رایگان انتخاب می‌شود.", false)
+            ChatMessage("سلام! بپرس.", false)
         )
     }
     val navy = Color(0xFF081526)
     val panel = Color(0xFF12263D)
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF32D6C2), background = navy, surface = panel)) {
-        Column(Modifier.fillMaxSize().background(navy).padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(navy).padding(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f)) {
-                    Text("دستیار اس ممد", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-                    Text(if (voiceActive) "دستیار صوتی پس‌زمینه فعال • بگو: مشتی چه خبر" else "چت‌بات آنلاین • برای شنود پس‌زمینه، میکروفون را روشن کن", color = Color(0xFF8FA9C2), fontSize = 12.sp)
+                    Text("اس‌ممد", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
                 }
                 IconButton(onClick = {
                     if (voiceActive) {
@@ -103,13 +97,13 @@ fun AssistantScreen() {
                         voiceActive = true
                     } else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }) {
-                    Icon(if (voiceActive) Icons.Default.MicOff else Icons.Default.Mic, contentDescription = "فعال یا خاموش کردن دستیار صوتی", tint = if (voiceActive) Color(0xFFFFC66D) else Color(0xFF32D6C2))
+                    Text(if (voiceActive) "■" else "م", color = if (voiceActive) Color(0xFFFFC66D) else Color(0xFF32D6C2), fontSize = 18.sp)
                 }
                 IconButton(onClick = { keyDraft = apiKey; showSettings = true }) {
-                    Icon(Icons.Default.Settings, contentDescription = "تنظیمات اتصال", tint = Color(0xFF32D6C2))
+                    Text("⚙", color = Color(0xFF32D6C2), fontSize = 18.sp)
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(6.dp))
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -130,7 +124,7 @@ fun AssistantScreen() {
                 }
                 if (loading) {
                     item {
-                        Text("در حال دریافت پاسخ از هوش مصنوعی…", color = Color(0xFF32D6C2), fontSize = 12.sp)
+                        Text("…", color = Color(0xFF32D6C2), fontSize = 12.sp)
                     }
                 }
             }
@@ -145,7 +139,7 @@ fun AssistantScreen() {
                     textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     decorationBox = { inner ->
-                        if (prompt.isEmpty()) Text("پیامت را بنویس…", color = Color.Gray)
+                        if (prompt.isEmpty()) Text("پیام…", color = Color.Gray)
                         inner()
                     }
                 )
@@ -177,32 +171,26 @@ fun AssistantScreen() {
                         }
                     }
                 ) {
-                    Icon(Icons.Default.Send, contentDescription = "ارسال", tint = Color(0xFF32D6C2))
+                    Text("➤", color = Color(0xFF32D6C2), fontSize = 20.sp)
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                if (apiKey.isBlank()) "اتصال هنوز تنظیم نشده • کلید رایگان را در تنظیمات وارد کن"
-                else "مدل: انتخاب خودکار از مدل‌های رایگان OpenRouter",
-                color = Color(0xFFFFC66D), fontSize = 11.sp
-            )
         }
 
         if (showSettings) {
             AlertDialog(
                 onDismissRequest = { showSettings = false },
-                title = { Text("تنظیم هوش مصنوعی آنلاین") },
+                title = { Text("تنظیمات") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("کلید API رایگان OpenRouter را اینجا وارد کن. کلید روی گوشی به‌صورت رمزگذاری‌شده ذخیره می‌شود و برای مدل پولی انتخاب نمی‌شود.", fontSize = 13.sp)
+                        Text("کلید رایگان OpenRouter", fontSize = 13.sp)
                         OutlinedTextField(
                             value = keyDraft,
                             onValueChange = { keyDraft = it },
-                            label = { Text("کلید API") },
+                            label = { Text("API Key") },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation()
                         )
-                        Text("دریافت کلید: openrouter.ai/keys", color = Color(0xFF32D6C2), fontSize = 12.sp)
+                        Text("openrouter.ai/keys", color = Color(0xFF32D6C2), fontSize = 12.sp)
                     }
                 },
                 confirmButton = {
@@ -222,10 +210,10 @@ fun AssistantScreen() {
                             apiKey = ""
                             showSettings = false
                         }
-                    }) { Text("ذخیره") }
+                    }) { Text("ثبت") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showSettings = false }) { Text("انصراف") }
+                    TextButton(onClick = { showSettings = false }) { Text("بستن") }
                 }
             )
         }
