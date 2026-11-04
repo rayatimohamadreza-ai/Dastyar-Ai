@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -78,9 +79,13 @@ fun AssistantScreen() {
         }
     }
     val messages = remember {
-        mutableStateListOf(
-            ChatMessage("سلام! بپرس.", false)
-        )
+        mutableStateListOf<ChatMessage>().apply {
+            addAll(ChatHistoryStore.load(context).takeLast(80))
+            if (isEmpty()) add(ChatMessage("سلام! بپرس.", false))
+        }
+    }
+    LaunchedEffect(messages.size) {
+        ChatHistoryStore.save(context, messages.toList())
     }
     val voiceInputLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
