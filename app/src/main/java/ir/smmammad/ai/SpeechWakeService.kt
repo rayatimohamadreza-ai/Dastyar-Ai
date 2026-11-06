@@ -35,7 +35,6 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private var ready = false
     private var serviceActive = false
     private var awaitingCommand = false
     private var listening = false
@@ -54,7 +53,6 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
         serviceActive = true
         if (wakeLock?.isHeld != true) wakeLock?.acquire()
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            speak("سرویس تشخیص گفتار روی این گوشی در دسترس نیست.")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -93,7 +91,6 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
             if (fa == TextToSpeech.LANG_MISSING_DATA || fa == TextToSpeech.LANG_NOT_SUPPORTED) {
                 tts?.language = Locale("fa")
             }
-            ready = true
         }
     }
 
