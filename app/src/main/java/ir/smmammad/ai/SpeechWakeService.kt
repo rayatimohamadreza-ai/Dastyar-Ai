@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.Intent
 import android.provider.Settings
 import android.provider.MediaStore
+import android.net.Uri
+import java.net.URLEncoder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -135,8 +137,55 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
      * No accessibility clicks or hidden actions are performed.
      */
     private fun tryHandleLocalCommand(rawCommand: String): Boolean {
-        val command = rawCommand.lowercase(Locale.ROOT)
+        val command = normalizeDigits(rawCommand.lowercase(Locale.ROOT))
+
+        // Safe, explicit system intents: the user confirms the final call/message/alarm in Android UI.
+        val phoneNumber = Regex("(?:\\+?\\d[\\d \\-()]{7,}\\d)").find(command)?.value
+            ?.replace(Regex("[^+0-9]"), "")
+        if ((command.contains("تماس") || command.contains("زنگ بزن")) && phoneNumber != null) {
+            return launchExternal(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneNumber")), "صفحه تماس باز شد؛ برای برقراری تماس خودت تأیید کن.")
+        }
+
+        if ((command.contains("پیامک") || command.contains("اس ام اس") || command.contains("sms")) && phoneNumber != null) {
+            val body = command.substringAfter("متن", "").trim()
+            val sms = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phoneNumber")).apply {
+                if (body.isNotBlank()) putExtra("sms_body", body)
+            }
+            return launchExternal(sms, "صفحه پیامک باز شد؛ متن و گیرنده را بررسی و خودت ارسال کن.")
+        }
+
+        val timerMinutes = Regex("(\\d+)\\s*(?:دقیقه|دقيقه)").find(command)?.groupValues?.get(1)?.toIntOrNull()
+        if ((command.contains("تایمر") || command.contains("زمان‌سنج")) && timerMinutes != null && timerMinutes > 0) {
+            return launchExternal(Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, timerMinutes * 60).putExtra(AlarmClock.EXTRA_MESSAGE, "دستیار اس ممد"), "تنظیم تایمر را در ساعت گوشی تأیید کن.")
+        }
+
+        val alarmHour = Regex("(?:ساعت\\s*)(\\d{1,2})(?::(\\d{2}))?").find(command)
+        if ((command.contains("آلارم") || command.contains("زنگ") || command.contains("بیدارم")) && alarmHour != null) {
+            val hour = alarmHour.groupValues[1].toIntOrNull()
+            val minute = alarmHour.groupValues.getOrNull(2)?.toIntOrNull() ?: 0
+            if (hour != null && hour in 0..23 && minute in 0..59) {
+                return launchExternal(Intent(AlarmClock.ACTION_SET_ALARM)
+                    .putExtra(AlarmClock.EXTRA_HOUR, hour)
+                    .putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                    .putExtra(AlarmClock.EXTRA_MESSAGE, "دستیار اس ممد"), "صفحه تنظیم زنگ هشدار باز شد؛ ساعت را تأیید کن.")
+            }
+        }
+
+        if (command.startsWith("جستجو ") || command.startsWith("بگرد ") || command.startsWith("در اینترنت ")) {
+            val query = command.removePrefix("جستجو ").removePrefix("بگرد ").removePrefix("در اینترنت ").trim()
+            if (query.isNotBlank()) {
+                return launchExternal(Intent(Intent.ACTION_WEB_SEARCH).putExtra("query", query), "نتایج جستجو باز شد.")
+            }
+        }
+
+        if (command.contains("موزیک") || command.contains("آهنگ") || command.contains("آهنگ پخش")) {
+            val query = URLEncoder.encode(rawCommand, "UTF-8")
+            return launchExternal(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=$query")), "نتایج موسیقی باز شد.")
+        }
+
         val intent: Intent? = when {
+            command.contains("ماشین حساب") || command.contains("حسابگر") ->
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALCULATOR)
             command.contains("تنظیمات وای فای") || command.contains("تنظیمات wifi") ->
                 Intent(Settings.ACTION_WIFI_SETTINGS)
             command.contains("تنظیمات بلوتوث") ->
@@ -147,19 +196,13 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
                 Intent(MediaStore.ACTION_IMAGE_CAPTURE)
             else -> null
         }
-        if (intent != null) {
-            return try {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
-                speakAndListen("چشم، بازش کردم.")
-                true
-            } catch (_: Exception) {
-                speakAndListen("نتونستم این بخش رو باز کنم.")
-                true
-            }
-        }
+        if (intent != null) return launchExternal(intent, "چشم، بازش کردم.")
 
         val packageNameToOpen = when {
+            command.contains("جیمیل") || command.contains("gmail") -> "com.google.android.gm"
+            command.contains("نقشه") || command.contains("مسیریاب") -> "com.google.android.apps.maps"
+            command.contains("گالری") -> "com.google.android.gallery3d"
+            command.contains("فایل") || command.contains("مدیریت فایل") -> "com.google.android.documentsui"
             command.contains("واتساپ") || command.contains("whatsapp") -> "com.whatsapp"
             command.contains("تلگرام") || command.contains("telegram") -> "org.telegram.messenger"
             command.contains("اینستاگرام") || command.contains("instagram") -> "com.instagram.android"
@@ -181,6 +224,34 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
         } catch (_: Exception) {
             speakAndListen("باز کردن برنامه انجام نشد.")
             true
+        }
+    }
+
+    private fun launchExternal(intent: Intent, successMessage: String): Boolean {
+        return try {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            speakAndListen(successMessage)
+            true
+        } catch (_: Exception) {
+            speakAndListen("این قابلیت یا برنامه روی گوشی در دسترس نیست.")
+            true
+        }
+    }
+
+    private fun normalizeDigits(value: String): String {
+        val persian = "۰۱۲۳۴۵۶۷۸۹"
+        val arabic = "٠١٢٣٤٥٦٧٨٩"
+        return buildString(value.length) {
+            value.forEach { ch ->
+                val p = persian.indexOf(ch)
+                val a = arabic.indexOf(ch)
+                append(when {
+                    p >= 0 -> ('0'.code + p).toChar()
+                    a >= 0 -> ('0'.code + a).toChar()
+                    else -> ch
+                })
+            }
         }
     }
 
