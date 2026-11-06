@@ -99,7 +99,7 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
             handler.postDelayed({ startListeningSafely() }, 500)
             return
         }
-        val normalized = text.lowercase(Locale.ROOT)
+        val normalized = VoiceCommandRouter.normalizeText(text)
         val wakePhrases = listOf("مشتی چه خبر", "سلام مشتی", "مشتی", "سلام دستیار", "دستیار اس ممد", "اس ممد", "تسلا", "ادیسون")
         val wake = wakePhrases.firstOrNull { normalized.contains(it) }
         if (!awaitingCommand && wake == null) {
