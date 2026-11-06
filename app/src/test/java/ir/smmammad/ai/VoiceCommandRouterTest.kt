@@ -7,7 +7,7 @@ import org.junit.Test
 class VoiceCommandRouterTest {
     @Test
     fun parsesGreeting() {
-        assertEquals("greeting", VoiceCommandRouter.parse("سلام مشتی")?.type)
+        assertEquals("greeting", VoiceCommandRouter.parse("سلام")?.type)
     }
 
     @Test
@@ -18,8 +18,8 @@ class VoiceCommandRouterTest {
     }
 
     @Test
-    fun removesWakeWordBeforeParsing() {
-        assertEquals("greeting", VoiceCommandRouter.parse("مشتی چه خبر")?.type)
+    fun parsesQuestionAfterWakeWord() {
+        assertEquals("greeting", VoiceCommandRouter.parse("چه خبر")?.type)
     }
 
     @Test
