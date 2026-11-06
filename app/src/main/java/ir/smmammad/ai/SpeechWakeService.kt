@@ -35,7 +35,7 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private var ready = false
+    private var serviceActive = false
     private var awaitingCommand = false
     private var listening = false
 
@@ -46,12 +46,17 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
         val power = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DastyarEsMammad:VoiceWake")
         wakeLock?.setReferenceCounted(false)
-        wakeLock?.acquire()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(41, buildNotification())
-        if (SpeechRecognizer.isRecognitionAvailable(this) && recognizer == null) {
+        serviceActive = true
+        if (wakeLock?.isHeld != true) wakeLock?.acquire()
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (recognizer == null) {
             recognizer = SpeechRecognizer.createSpeechRecognizer(this).also { speech ->
                 speech.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: android.os.Bundle?) { listening = true }
@@ -73,8 +78,10 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
                     override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
                 })
             }
-            if (ready) startListeningSafely()
         }
+        // Speech recognition must not depend on TTS initialization; some phones have no
+        // Persian TTS voice installed even though speech recognition is available.
+        startListeningSafely()
         return START_STICKY
     }
 
@@ -84,8 +91,6 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
             if (fa == TextToSpeech.LANG_MISSING_DATA || fa == TextToSpeech.LANG_NOT_SUPPORTED) {
                 tts?.language = Locale("fa")
             }
-            ready = true
-            startListeningSafely()
         }
     }
 
@@ -94,7 +99,7 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
             handler.postDelayed({ startListeningSafely() }, 500)
             return
         }
-        val normalized = text.lowercase(Locale.ROOT)
+        val normalized = VoiceCommandRouter.normalizeText(text)
         val wakePhrases = listOf("مشتی چه خبر", "سلام مشتی", "مشتی", "سلام دستیار", "دستیار اس ممد", "اس ممد", "تسلا", "ادیسون")
         val wake = wakePhrases.firstOrNull { normalized.contains(it) }
         if (!awaitingCommand && wake == null) {
@@ -280,8 +285,10 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun startListeningSafely() {
-        if (!ready || listening || recognizer == null) return
+        if (!serviceActive || listening || recognizer == null) return
         try {
+            // Mark the request active before calling the platform API to avoid duplicate
+            // startListening calls while waiting for onReadyForSpeech().
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
@@ -290,8 +297,10 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
             }
+            listening = true
             recognizer?.startListening(intent)
         } catch (_: Exception) {
+            listening = false
             handler.postDelayed({ startListeningSafely() }, 2000)
         }
     }
@@ -359,6 +368,8 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        serviceActive = false
+        listening = false
         handler.removeCallbacksAndMessages(null)
         recognizer?.cancel()
         recognizer?.destroy()

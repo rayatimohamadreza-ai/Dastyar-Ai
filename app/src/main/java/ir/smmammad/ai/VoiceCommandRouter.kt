@@ -20,13 +20,13 @@ internal object VoiceCommandRouter {
     )
 
     fun removeWakeWord(raw: String): String {
-        val text = normalize(raw)
-        val word = wakeWords.firstOrNull { text.contains(normalize(it)) } ?: return text
-        return text.replace(normalize(word), " ").trim()
+        val text = normalizeText(raw)
+        val word = wakeWords.firstOrNull { text.contains(normalizeText(it)) } ?: return text
+        return text.replace(normalizeText(word), " ").trim()
     }
 
     fun parse(raw: String): Action? {
-        val q = normalize(removeWakeWord(raw))
+        val q = normalizeText(removeWakeWord(raw))
         if (q.isBlank()) return null
 
         if (q.startsWith("سلام") || q.startsWith("درود") || q == "مشتی") {
@@ -64,7 +64,7 @@ internal object VoiceCommandRouter {
         context.getSharedPreferences("assistant_local_notes", Context.MODE_PRIVATE)
             .getString("notes", "").orEmpty()
 
-    private fun normalize(value: String): String = value
+    fun normalizeText(value: String): String = value
         .lowercase(Locale.ROOT)
         .replace('ي', 'ی')
         .replace('ك', 'ک')
