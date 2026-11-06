@@ -127,7 +127,8 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
             val answer = try {
                 askOpenRouter(key, emptyList(), command)
             } catch (e: Exception) {
-                "ارتباط برقرار نشد. اینترنت و کلید اتصال را بررسی کن."
+                val detail = e.message?.takeIf { it.isNotBlank() } ?: "خطای نامشخص"
+                "اتصال به هوش مصنوعی ناموفق بود: $detail"
             }
             speakAndListen(answer)
         }
