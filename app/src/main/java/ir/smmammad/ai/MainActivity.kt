@@ -69,6 +69,8 @@ fun AssistantScreen() {
     var apiKey by remember { mutableStateOf(SecureApiKeyStore.read(context).orEmpty()) }
     var keyDraft by remember { mutableStateOf(apiKey) }
     var showSettings by remember { mutableStateOf(false) }
+    var testingConnection by remember { mutableStateOf(false) }
+    var connectionTestMessage by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var voiceActive by remember { mutableStateOf(false) }
     val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -266,6 +268,32 @@ fun AssistantScreen() {
                             visualTransformation = PasswordVisualTransformation()
                         )
                         Text("openrouter.ai/keys", color = Color(0xFF32D6C2), fontSize = 12.sp)
+                        TextButton(
+                            enabled = !testingConnection && keyDraft.trim().isNotEmpty(),
+                            onClick = {
+                                testingConnection = true
+                                connectionTestMessage = "در حال آزمایش اتصال…"
+                                scope.launch {
+                                    try {
+                                        val result = askOpenRouter(
+                                            keyDraft.trim(),
+                                            emptyList(),
+                                            "فقط کلمه «آماده» را پاسخ بده."
+                                        )
+                                        connectionTestMessage = "اتصال موفق بود؛ پاسخ سرویس: ${result.take(100)}"
+                                    } catch (e: Exception) {
+                                        connectionTestMessage = "اتصال ناموفق: ${e.message ?: "خطای نامشخص"}"
+                                    } finally {
+                                        testingConnection = false
+                                    }
+                                }
+                            }
+                        ) {
+                            Text(if (testingConnection) "در حال آزمایش…" else "آزمایش اتصال")
+                        }
+                        if (connectionTestMessage.isNotBlank()) {
+                            Text(connectionTestMessage, fontSize = 12.sp, color = if (connectionTestMessage.startsWith("اتصال موفق")) Color(0xFF32D6C2) else Color(0xFFFFB4AB))
+                        }
                     }
                 },
                 confirmButton = {
