@@ -1,0 +1,29 @@
+package ir.smmammad.ai
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+class VoiceCommandRouterTest {
+    @Test
+    fun parsesGreeting() {
+        assertEquals("greeting", VoiceCommandRouter.parse("سلام مشتی")?.type)
+    }
+
+    @Test
+    fun parsesNoteWithPersianSpacing() {
+        val action = VoiceCommandRouter.parse("یادداشت کن خرید قطعه")
+        assertEquals("save_note", action?.type)
+        assertEquals("خرید قطعه", action?.argument)
+    }
+
+    @Test
+    fun removesWakeWordBeforeParsing() {
+        assertEquals("greeting", VoiceCommandRouter.parse("مشتی چه خبر")?.type)
+    }
+
+    @Test
+    fun unknownCommandFallsThroughToAssistant() {
+        assertNull(VoiceCommandRouter.parse("برایم درباره مدار تغذیه توضیح بده"))
+    }
+}
