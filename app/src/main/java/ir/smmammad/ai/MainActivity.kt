@@ -308,14 +308,10 @@ internal suspend fun askOpenRouter(apiKey: String, history: List<ChatMessage>, l
         }
         messagesJson.put(JSONObject().put("role", "user").put("content", latest))
 
+        // Let OpenRouter choose a currently available free chat model dynamically.
+        // Avoid hard-coded free model IDs: the free catalog changes over time.
         val payload = JSONObject()
             .put("model", "openrouter/free")
-            .put("models", JSONArray()
-                .put("recursive/flint-v1.0:free")
-                .put("xingchen-agi/xing4.0-29b-a4b:free")
-                .put("nvidia/nemotron-3.5-super-vl:free")
-                .put("cohere/north-mini-code:free")
-                .put("liquid/lfm-2.5-2.6b:free"))
             .put("messages", messagesJson)
             .put("temperature", 0.4)
             .put("max_tokens", 1200)
