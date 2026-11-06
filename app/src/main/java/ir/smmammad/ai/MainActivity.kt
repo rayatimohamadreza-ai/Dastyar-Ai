@@ -310,8 +310,15 @@ internal suspend fun askOpenRouter(apiKey: String, history: List<ChatMessage>, l
 
         val payload = JSONObject()
             .put("model", "openrouter/free")
+            .put("models", JSONArray()
+                .put("recursive/flint-v1.0:free")
+                .put("xingchen-agi/xing4.0-29b-a4b:free")
+                .put("nvidia/nemotron-3.5-super-vl:free")
+                .put("cohere/north-mini-code:free")
+                .put("liquid/lfm-2.5-2.6b:free"))
             .put("messages", messagesJson)
             .put("temperature", 0.4)
+            .put("max_tokens", 1200)
             .toString()
 
         val client = OkHttpClient.Builder()
@@ -329,14 +336,26 @@ internal suspend fun askOpenRouter(apiKey: String, history: List<ChatMessage>, l
 
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val detail = try { JSONObject(body).optJSONObject("error")?.optString("message") } catch (_: Exception) { null }
-                throw IllegalStateException(detail?.takeIf { it.isNotBlank() } ?: "خطای HTTP ${response.code}")
+            val root = try { JSONObject(body) } catch (_: Exception) { JSONObject() }
+            val apiError = root.optJSONObject("error")
+            if (apiError != null) {
+                val detail = apiError.optString("message", "خطای ارائه‌دهنده مدل")
+                val code = apiError.opt("code")?.toString().orEmpty()
+                throw IllegalStateException(
+                    if (code.isNotBlank()) "$detail (کد $code)" else detail
+                )
             }
-            val root = JSONObject(body)
-            root.getJSONArray("choices").getJSONObject(0)
-                .getJSONObject("message").optString("content")
-                .ifBlank { "پاسخی از مدل دریافت نشد؛ دوباره امتحان کن." }
+            if (!response.isSuccessful) {
+                throw IllegalStateException("خطای HTTP ${response.code}: ${body.take(300)}")
+            }
+            val choices = root.optJSONArray("choices")
+                ?: throw IllegalStateException("پاسخ سرویس ساختار قابل‌شناسایی ندارد: ${body.take(300)}")
+            if (choices.length() == 0) {
+                throw IllegalStateException("سرویس هیچ پاسخی از مدل برنگرداند.")
+            }
+            choices.getJSONObject(0).optJSONObject("message")?.optString("content")
+                ?.takeIf { it.isNotBlank() }
+                ?: "پاسخی از مدل دریافت نشد؛ دوباره امتحان کن."
         }
     }
 
