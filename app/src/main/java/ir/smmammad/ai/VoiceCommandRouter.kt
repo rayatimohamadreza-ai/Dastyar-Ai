@@ -22,7 +22,7 @@ internal object VoiceCommandRouter {
     fun removeWakeWord(raw: String): String {
         val text = normalizeText(raw)
         val word = wakeWords.firstOrNull { text.contains(normalizeText(it)) } ?: return text
-        return text.replace(normalize(word), " ").trim()
+        return text.replace(normalizeText(word), " ").trim()
     }
 
     fun parse(raw: String): Action? {
