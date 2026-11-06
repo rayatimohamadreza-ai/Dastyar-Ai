@@ -94,7 +94,7 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
             return
         }
         val normalized = text.lowercase(Locale.ROOT)
-        val wakePhrases = listOf("مشتی چه خبر", "مشتی", "دستیار اس ممد", "اس ممد")
+        val wakePhrases = listOf("مشتی چه خبر", "سلام مشتی", "مشتی", "سلام دستیار", "دستیار اس ممد", "اس ممد", "تسلا", "ادیسون")
         val wake = wakePhrases.firstOrNull { normalized.contains(it) }
         if (!awaitingCommand && wake == null) {
             handler.postDelayed({ startListeningSafely() }, 400)
@@ -137,6 +137,28 @@ class SpeechWakeService : Service(), TextToSpeech.OnInitListener {
      * No accessibility clicks or hidden actions are performed.
      */
     private fun tryHandleLocalCommand(rawCommand: String): Boolean {
+        // Fast on-device commands adapted from the user's Dastyar AI Studio prototype.
+        val parsed = VoiceCommandRouter.parse(rawCommand)
+        if (parsed != null) {
+            when (parsed.type) {
+                "greeting" -> speakAndListen("سلام مشتی! چاکریم، بفرما در خدمتم.")
+                "reply" -> speakAndListen(parsed.argument)
+                "save_note" -> {
+                    if (parsed.argument.isBlank()) {
+                        speakAndListen("متن یادداشت رو بعد از دستور بگو.")
+                    } else {
+                        VoiceCommandRouter.saveNote(this, parsed.argument)
+                        speakAndListen("یادداشتت روی گوشی ذخیره شد.")
+                    }
+                }
+                "list_notes" -> {
+                    val notes = VoiceCommandRouter.readNotes(this)
+                    speakAndListen(if (notes.isBlank()) "هنوز یادداشتی ذخیره نکردی." else "یادداشت‌های ذخیره‌شده: $notes")
+                }
+                else -> return false
+            }
+            return true
+        }
         val command = normalizeDigits(rawCommand.lowercase(Locale.ROOT))
 
         // Safe, explicit system intents: the user confirms the final call/message/alarm in Android UI.
