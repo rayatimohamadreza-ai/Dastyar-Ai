@@ -23,6 +23,13 @@ class VoiceCommandRouterTest {
     }
 
     @Test
+    fun normalizesArabicCharactersToPersian() {
+        val action = VoiceCommandRouter.parse("يادداشت کن تست")
+        assertEquals("save_note", action?.type)
+        assertEquals("تست", action?.argument)
+    }
+
+    @Test
     fun unknownCommandFallsThroughToAssistant() {
         assertNull(VoiceCommandRouter.parse("برایم درباره مدار تغذیه توضیح بده"))
     }
