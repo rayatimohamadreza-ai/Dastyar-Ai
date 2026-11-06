@@ -56,7 +56,7 @@ internal object VoiceCommandRouter {
     fun saveNote(context: Context, note: String) {
         val prefs = context.getSharedPreferences("assistant_local_notes", Context.MODE_PRIVATE)
         val old = prefs.getString("notes", "").orEmpty()
-        val updated = (listOf(note) + old.split("\\n").filter { it.isNotBlank() }).take(50).joinToString("\\n")
+        val updated = (listOf(note) + old.split("\n").filter { it.isNotBlank() }).take(50).joinToString("\n")
         prefs.edit().putString("notes", updated).apply()
     }
 
