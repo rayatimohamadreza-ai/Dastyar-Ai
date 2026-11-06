@@ -328,7 +328,7 @@ internal suspend fun askOpenRouter(apiKey: String, history: List<ChatMessage>, l
         val messagesJson = JSONArray()
         messagesJson.put(JSONObject()
             .put("role", "system")
-            .put("content", "تو دستیار فارسی‌زبان اس ممد هستی؛ در تعمیر برد و لوازم خانگی کوچک دقیق، مرحله‌به‌مرحله و ایمن راهنمایی کن. برای برق شهر همیشه هشدار قطع برق و رعایت ایمنی بده. اگر اطلاعات کافی نیست سؤال روشن‌کننده بپرس. پاسخ را فارسی و قابل فهم بنویس."))
+            .put("content", "تو دستیار هوشمند همه‌کاره فارسی‌زبان به نام اس‌ممد هستی. در گفتگو، پاسخ به پرسش‌های عمومی، آموزش، برنامه‌نویسی، فناوری، جست‌وجو و تحلیل کمک کن. پاسخ‌ها را دقیق، روشن، کاربردی و متناسب با سطح کاربر بنویس؛ اگر اطلاعات کافی نیست یک سؤال مشخص بپرس و حدس را به‌جای واقعیت جا نزن. در موضوعات تعمیرات برق و الکترونیک، مرحله‌به‌مرحله راهنمایی کن و پیش از هر کار روی برق شهر، قطع کامل برق و رعایت ایمنی را گوشزد کن. پاسخ را به فارسی روان و قابل فهم ارائه بده."))
         history.filter { it.text.isNotBlank() }.forEach {
             messagesJson.put(JSONObject()
                 .put("role", if (it.fromUser) "user" else "assistant")
@@ -362,15 +362,21 @@ internal suspend fun askOpenRouter(apiKey: String, history: List<ChatMessage>, l
             val body = response.body?.string().orEmpty()
             val root = try { JSONObject(body) } catch (_: Exception) { JSONObject() }
             val apiError = root.optJSONObject("error")
-            if (apiError != null) {
-                val detail = apiError.optString("message", "خطای ارائه‌دهنده مدل")
-                val code = apiError.opt("code")?.toString().orEmpty()
-                throw IllegalStateException(
-                    if (code.isNotBlank()) "$detail (کد $code)" else detail
-                )
-            }
-            if (!response.isSuccessful) {
-                throw IllegalStateException("خطای HTTP ${response.code}: ${body.take(300)}")
+            if (apiError != null || !response.isSuccessful) {
+                val code = apiError?.opt("code")?.toString().orEmpty()
+                val detail = apiError?.optString("message").orEmpty()
+                val friendly = when (response.code) {
+                    401 -> "کلید OpenRouter نامعتبر یا غیرفعال است؛ کلید را دوباره بررسی کن."
+                    402 -> "اعتبار حساب یا دسترسی رایگان این درخواست کافی نیست؛ یک مدل رایگان دیگر را امتحان کن."
+                    403 -> "دسترسی این کلید به مدل انتخاب‌شده مجاز نیست."
+                    404 -> "فعلاً مدل رایگان در دسترس نیست؛ کمی بعد دوباره تلاش کن."
+                    408 -> "زمان پاسخ‌گویی تمام شد؛ دوباره تلاش کن."
+                    429 -> "محدودیت درخواست رایگان فعال شده؛ چند دقیقه صبر کن و دوباره امتحان کن."
+                    in 500..599 -> "سرویس هوش مصنوعی موقتاً دچار مشکل شده؛ بعداً دوباره تلاش کن."
+                    else -> detail.takeIf { it.isNotBlank() } ?: "خطای ارتباط با سرویس (HTTP ${response.code})."
+                }
+                val suffix = if (code.isNotBlank()) " (کد $code)" else ""
+                throw IllegalStateException(friendly + suffix)
             }
             val choices = root.optJSONArray("choices")
                 ?: throw IllegalStateException("پاسخ سرویس ساختار قابل‌شناسایی ندارد: ${body.take(300)}")
